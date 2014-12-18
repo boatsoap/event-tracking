@@ -1,0 +1,44 @@
+doctype html
+html
+  head
+    title Playback - Test
+    link(href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" rel="stylesheet" type="text/css")   
+  body
+    .container
+      #map(style='height:500px;')
+    script(src='http://code.jquery.com/jquery-1.11.0.js')
+    script(src='http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js')
+    script(src='/socket.io/socket.io.js')
+    script.
+      (function(){
+        var socket = io();
+        var map = L.map('map', {center: [37.808034, -122.456333], zoom: 10 });
+        L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+          maxZoom: 20
+        }).addTo(map)
+
+        var boats = [];
+
+        socket.on('dropped', function(){
+          console.log('dropped');
+        })
+        socket.on('position', function(data){
+          //lastPos = newPos;
+          //newPos = {latLng: [data.lat, data.lng], timestamp: data.timestamp};
+
+          if(boats.length == 0){
+            console.log('here');
+            var newBoat = new Boat(data);
+            boats.push(newBoat);
+          }
+          
+          for(var i=0; i<boats.length; i++){
+            if(data.userId == boats[i].userId){
+              boats[i].newPosition(data);
+            }
+          }
+        });
+
+      })();
+    script(src='/javascript/rtAnimation.js')

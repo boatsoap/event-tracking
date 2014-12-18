@@ -1,0 +1,139 @@
+<html>
+  <head>
+    <link href='//maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css' rel='stylesheet'></limk>
+  </head>
+  <body>
+    <div class="container">
+      <div id="connArr">[]</div>
+      <div id="map" style="height:100%;"></div>
+    </div>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css"></link>
+    
+    <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
+    <script src='/socket.io/socket.io.js'></script>
+    <script>
+      var socket = io('http://localhost:8080/viewer-io')
+        , map = L.map('map', {center: [37.808034, -122.456333], zoom: 10 })
+        , polyline = L.polyline([])
+        , boatArr = []
+        , markArr = []
+        , controls = L.control.layers({}, {}, {collapsed: false}).addTo(map)
+        , scale = L.control.scale().addTo(map);
+
+      L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>',
+        maxZoom: 20
+      }).addTo(map)
+
+
+      //FUNCTIONS=================================================
+
+      function newBoat(data, cb){
+
+        var boat = {'id': data.id, 'username': data.username, 'marker': L.marker([data.lat, data.lng]).addTo(map),
+          'line': new L.polyline([], {'color': getRandomColor()}) };
+
+        boat.marker.bindPopup(popupHtml(data));
+
+        cb(boat);
+      }
+
+      function getRandomColor() {
+        var letters = '0123456789ABCDEF'.split('');
+        var color = '#';
+        for (var i = 0; i < 6; i++ ) {
+          color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+      }
+
+      function popupHtml(data){
+
+        return '<b>Boat Name: ' + data.username + '</b><div>Lat: ' + data.lat + '</div>' +
+                '<div>Lng: ' + data.lng + '</div><div>Speed: ' + data.sog + '</div>' + 
+                '<div>Course: ' + data.cog + '</div>';
+
+      }
+
+      function newMark(data, cb){
+        console.log(data)
+        var mark = L.marker([parseFloat(data[0]).toFixed(6), parseFloat(data[1]).toFixed(6)]).addTo(map);
+        cb(mark);
+      }
+
+
+      //SOCKET EVENTS=========================================================
+
+      socket.on('position', function(data){
+
+        console.log('id: ' + data.id + '\n   lat: ' + data.lat + '\n   lng: ' + data.lng);
+        
+        var len = boatArr.length;
+
+        for(var i=0; i<len; i++){
+          var item = boatArr[i];
+
+          if(item.id === data.id){
+            //var arbPoint = findSecondLatLon(data.cog, data.lat, data.lng);
+            item.marker.setLatLng([data.lat, data.lng]);
+            if(item.line._latlngs.length > 20){
+              item.line._latlngs.shift();
+              item.line.addLatLng([data.lat, data.lng]).addTo(map);
+            } else {
+              item.line.addLatLng([data.lat, data.lng]).addTo(map);
+            }
+            var popup = item.marker.getPopup();
+            popup.setContent(popupHtml(data));
+            //item.heading.setLatLngs([[data.lat, data.lng], arbPoint]);
+
+            return false;
+          }
+        }
+
+        newBoat(data, function(boat){
+          controls.addOverlay(boat.marker, boat.username);
+          boatArr.push(boat); 
+          for(var i=0; i<boatArr.length; i++){
+            var str = boatArr[i].username + ', ';
+          }
+          document.getElementById("connArr").innerHTML = str;
+        });
+      })
+
+      socket.on('endRace', function(data){
+        var len = boatArr.length;
+
+        for(var i=0; i<len; i++){
+            map.removeLayer(boatArr[i].marker);
+            map.removeLayer(boatArr[i].line);
+            boatArr.splice(i, 1);
+            //add function to remove boat from control menu
+        }
+      })
+
+      socket.emit('getMarks', {}, function(err, obj){
+        console.log(obj);
+        if(!err && obj){
+          for(var i=0; i<obj.length; i++){
+            newMark(obj[i], function(data){
+              markArr.push(data);
+            })
+          }
+        }
+      })
+
+      socket.on('newMark', function(obj){
+        newMark(obj, function(data){
+          markArr.push(data);
+        })
+      })
+
+      socket.on('clearMarks', function(){
+        for(var i=0; i<markArr.length; i++){
+          map.removeLayer(markArr[i])
+          markArr.splice(i, 1);
+        }
+      })
+      </script>
+  </body>
+</html>
